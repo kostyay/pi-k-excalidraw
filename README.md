@@ -6,6 +6,10 @@
 
 **[Install](#install)** · **[Usage](#usage)** · **[How it works](#how-it-works)**
 
+<img src="media/demo.gif" alt="pi-k-excalidraw demo — /excalidraw driving a live preview" width="720" />
+
+*≈ 19 s walkthrough of `/excalidraw` driving a live preview.*
+
 </div>
 
 *Let pi draw Excalidraw diagrams that preview live in a glimpse window — no
@@ -41,7 +45,9 @@ globally.
 
 ```bash
 git clone https://github.com/kostyay/pi-k-excalidraw.git
-cp -r pi-k-excalidraw/extensions/pi-k-excalidraw ~/.pi/agent/extensions/
+cd pi-k-excalidraw
+npm install            # pulls in glimpseui, the webview host
+cp -r extensions/pi-k-excalidraw ~/.pi/agent/extensions/
 ```
 
 Then `/reload` in pi.
@@ -67,7 +73,7 @@ Then `/reload` in pi.
 
 | Command | Description |
 |---------|-------------|
-| `/excalidraw <description>` | Kick off a drawing turn. The Excalidraw element-format cheat sheet is injected into the system prompt for the rest of the session, so the model never has to ask for it. |
+| `/excalidraw <description>` | Kick off a drawing turn. The Excalidraw element-format cheat sheet is injected into the system prompt for the rest of the session, so the model never has to ask for it. After every drawing turn pi prompts you to send the screenshot back to the LLM with optional comments for another refinement pass — decline to exit the loop. |
 
 ### Clipboard export
 
@@ -115,6 +121,17 @@ it drew):
 take a screenshot and check if the labels overlap
 ```
 
+The model is also prompted (via `draw-instruction.md`) to call
+`screenshot_diagram` itself after each draw and self-correct overlaps,
+truncated text, low-contrast labels, off-camera elements, and misaimed
+arrows before reporting back.
+
+Review loop: after every turn started by `/excalidraw`, pi opens a confirm
+dialog asking whether to send the current screenshot back to the LLM. Accept
+to enter free-form comments (or leave them empty for a generic review pass);
+the screenshot + comments are forwarded as a new user message that extends
+the latest checkpoint. Decline to leave the loop.
+
 Mermaid shortcut:
 
 ```
@@ -135,14 +152,25 @@ draw the OAuth flow as a mermaid sequence diagram
 └──────────────────────┘     └──────────────────────────┘
 ```
 
-- The element-format cheat sheet lives in
-  `extensions/pi-k-excalidraw/prompts/element-format.md` and is loaded from
-  disk at module init — edit it in place, just restart pi.
+- Prompts live as standalone markdown files under
+  `extensions/pi-k-excalidraw/prompts/` (`element-format.md` cheat sheet,
+  `draw-instruction.md` for `/excalidraw` turns, `review-instruction.md` for
+  the post-turn review loop) and are loaded from disk at module init — edit
+  in place, just restart pi.
 - Streaming partial JSON is parsed by `parser.ts` so long diagrams render
-  element-by-element instead of waiting for the full payload.
+  element-by-element instead of waiting for the full payload (throttled to
+  ~80 ms between webview pushes).
 - Checkpoints let successive `draw_diagram` calls extend the previous canvas
   rather than replacing it; pass `{ "type": "restoreCheckpoint", "id": "<id>" }`
-  as the first element.
+  as the first element. Use `{ "type": "delete", "ids": "id1,id2" }` to
+  remove specific elements before re-adding them.
+- `screenshot_diagram` runs an RPC into the webview, exports the canvas as
+  PNG, and returns it as image content so the model can visually inspect its
+  own work and self-correct.
+- Mermaid diagrams (`flowchart`, `sequence`, `class`, `ER`) are converted to
+  native Excalidraw elements inside the webview via
+  `@excalidraw/mermaid-to-excalidraw`; other Mermaid types fall back to
+  rendered images.
 
 ---
 

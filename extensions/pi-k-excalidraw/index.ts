@@ -118,29 +118,22 @@ const DRAW_INSTRUCTION_TEMPLATE = loadPrompt("draw-instruction.md");
 const REVIEW_INSTRUCTION_TEMPLATE = loadPrompt("review-instruction.md");
 
 /**
- * Lazily import the glimpseui module. Tries the bare specifier first (works when
- * pi resolves through the same global node_modules); falls back to a path derived
- * from process.execPath for unusual install layouts.
+ * Lazily import the glimpseui module. It is declared as a runtime dependency in
+ * package.json, so under a normal `pi install` it resolves from this extension's
+ * own node_modules. The error path here is a safety net for unusual install
+ * layouts (e.g. someone copied the extension by hand without running
+ * `npm install`).
  */
 async function loadGlimpse(): Promise<GlimpseModule> {
 	if (cachedGlimpse) return cachedGlimpse;
-	const dynamicImport = (spec: string): Promise<unknown> => import(spec);
 	try {
-		cachedGlimpse = (await dynamicImport("glimpseui")) as GlimpseModule;
+		cachedGlimpse = (await import("glimpseui" as string)) as GlimpseModule;
 		return cachedGlimpse;
-	} catch {
-		const nodeBin = process.execPath;
-		const candidate = path.resolve(
-			path.dirname(nodeBin),
-			"..",
-			"lib",
-			"node_modules",
-			"glimpseui",
-			"src",
-			"glimpse.mjs",
+	} catch (e) {
+		throw new Error(
+			"glimpseui not found — run `npm install` in the extension directory, " +
+				`or install it from https://github.com/hazat/glimpse. Underlying error: ${errorMessage(e)}`,
 		);
-		cachedGlimpse = (await dynamicImport(candidate)) as GlimpseModule;
-		return cachedGlimpse;
 	}
 }
 
@@ -222,22 +215,37 @@ async function openPreviewWindow(): Promise<void> {
 	await new Promise<void>((resolve) => win.on("ready", () => resolve()));
 }
 
+/** Start (or reuse) the preview-window readiness promise. On failure the
+ *  cached promise is cleared so the next caller can retry instead of being
+ *  permanently wedged on a rejected promise. Returns the promise so callers
+ *  may await it; fire-and-forget callers should attach `.catch()` themselves. */
+function startPreviewWindow(): Promise<void> {
+	if (windowReadyPromise) return windowReadyPromise;
+	const p = openPreviewWindow();
+	windowReadyPromise = p;
+	p.catch(() => {
+		if (windowReadyPromise === p) windowReadyPromise = null;
+	});
+	return p;
+}
+
 /**
  * Open a glimpse window if none exists, wait for it to be ready, then push the
  * payload. Concurrent calls share a single readiness promise; subsequent calls
  * after ready just send.
  */
 async function ensureWindow(payload: { elements: ExcalidrawElement[]; viewport: Viewport | null }): Promise<void> {
-	if (!windowReadyPromise) windowReadyPromise = openPreviewWindow();
-	await windowReadyPromise;
+	await startPreviewWindow();
 	activeWindow?.send(`window.__piRender(${JSON.stringify(payload)})`);
 }
 
 /** Schedule a throttled streaming update to the preview window. The window is
- *  opened on first call so it's already loading by the time elements arrive. */
+ *  opened on first call so it's already loading by the time elements arrive.
+ *  Failures are swallowed here — the canonical error surface is the tool's
+ *  `execute()`, which awaits `ensureWindow` and converts to a tool error. */
 function scheduleStreamUpdate(elements: ExcalidrawElement[], viewport: Viewport | null): void {
 	streamPendingPayload = { elements, viewport };
-	if (!windowReadyPromise) windowReadyPromise = openPreviewWindow();
+	startPreviewWindow().catch(() => { /* surfaced via execute() */ });
 	if (streamThrottleTimer) return;
 	streamThrottleTimer = setTimeout(() => {
 		streamThrottleTimer = null;
@@ -629,8 +637,7 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 			// the conversion RPC. The mermaid module loads lazily inside the
 			// webview on first use.
 			try {
-				if (!windowReadyPromise) windowReadyPromise = openPreviewWindow();
-				await windowReadyPromise;
+				await startPreviewWindow();
 			} catch (e) {
 				return errorResult(`Preview window failed: ${errorMessage(e)}`);
 			}
@@ -754,8 +761,9 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 			if (block?.type === "toolCall" && block.name === "draw_diagram") {
 				streamBuffers.set(block.id, "");
 				// Open the window early so esm.sh + fonts are loading while the
-				// model is still streaming the first elements.
-				if (!windowReadyPromise) windowReadyPromise = openPreviewWindow();
+				// model is still streaming the first elements. Failures are
+				// swallowed; the tool's execute() will surface them.
+				startPreviewWindow().catch(() => { /* surfaced via execute() */ });
 			}
 			return;
 		}
