@@ -1,0 +1,62 @@
+{
+  "name": "pi-k-excalidraw",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Native Excalidraw diagram preview tool for pi — draw and save diagrams from the agent with a live glimpse webview.",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "excalidraw",
+    "diagram",
+    "diagramming",
+    "preview",
+    "coding-agent"
+  ],
+  "license": "MIT",
+  "author": "Konstantin Ostrovsky <kostyay@users.noreply.github.com>",
+  "homepage": "https://github.com/kostyay/pi-k-excalidraw#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kostyay/pi-k-excalidraw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kostyay/pi-k-excalidraw/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "prompts": [
+      "./extensions/pi-k-excalidraw/prompts"
+    ]
+  },
+  "files": [
+    "extensions",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test extensions/pi-k-excalidraw/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-ai": "^0.69.0",
+    "@mariozechner/pi-coding-agent": "^0.69.0",
+    "@mariozechner/pi-tui": "^0.69.0",
+    "@types/node": "^22.10.0",
+    "typebox": "^1.1.32",
+    "typescript": "^5.7.0"
+  }
+}
