@@ -28,12 +28,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+	buildExcalidrawFile,
+	countElements,
+	DEFAULT_DIAGRAM_DIR,
+	errorMessage,
+	findDiagramByName,
+	parseExcalidrawFile,
+	relativeDisplay,
+	resolveDiagramPath,
+} from "./diagrams.ts";
+import {
 	extractStreamingElements,
 	resolveElements,
 	type ExcalidrawElement,
 	type Viewport,
 } from "./parser.ts";
 import { getWebviewHtml } from "./webview.ts";
+
+export { slugifyDiagramName } from "./diagrams.ts";
 
 /** Maximum allowed size for the elements JSON input (5 MB). */
 const MAX_INPUT_BYTES = 5 * 1024 * 1024;
@@ -65,6 +77,16 @@ let cheatSheetActive = false;
 /** Per-tool-call buffers of streaming `draw_diagram` argument JSON. */
 const streamBuffers = new Map<string, string>();
 
+/** Pending Node→webview RPC calls keyed by request id. `cleanup` clears the
+ *  timeout and abort listener; calling it before settling guarantees neither
+ *  fires after the RPC has finished. */
+interface PendingRpc {
+	resolve: (data: unknown) => void;
+	reject: (err: Error) => void;
+	cleanup: () => void;
+}
+const pendingRpcs = new Map<string, PendingRpc>();
+
 /** Throttle gate for streaming updates pushed to the webview. */
 let streamThrottleTimer: ReturnType<typeof setTimeout> | null = null;
 let streamPendingPayload: { elements: ExcalidrawElement[]; viewport: Viewport | null } | null = null;
@@ -85,11 +107,6 @@ const ELEMENT_FORMAT_PROMPT = loadPrompt("element-format.md");
 /** User-message template for /excalidraw. The literal `{{task}}` placeholder
  *  is replaced with the user's diagram description. */
 const DRAW_INSTRUCTION_TEMPLATE = loadPrompt("draw-instruction.md");
-
-/** Best-effort error message extraction for arbitrary thrown values. */
-function errorMessage(e: unknown): string {
-	return (e as Error)?.message ?? String(e);
-}
 
 /**
  * Lazily import the glimpseui module. Tries the bare specifier first (works when
@@ -155,11 +172,20 @@ async function runCopy(win: GlimpseWindow, target: "svg" | "png", task: () => Pr
 	}
 }
 
-/** Handle a message from the webview. Routes `copy-svg` and `copy-png` requests
- *  to the appropriate clipboard writer and acks the webview UI. */
+/** Handle a message from the webview. Routes `copy-svg` / `copy-png` requests
+ *  to the appropriate clipboard writer and `rpc-result` replies to the matching
+ *  pending RPC entry. */
 async function handleWebviewMessage(win: GlimpseWindow, data: unknown): Promise<void> {
 	if (!data || typeof data !== "object") return;
-	const msg = data as { type?: unknown; svg?: unknown; base64?: unknown };
+	const msg = data as {
+		type?: unknown;
+		svg?: unknown;
+		base64?: unknown;
+		id?: unknown;
+		ok?: unknown;
+		data?: unknown;
+		error?: unknown;
+	};
 
 	if (msg.type === "copy-svg" && typeof msg.svg === "string") {
 		const svg = msg.svg;
@@ -172,6 +198,62 @@ async function handleWebviewMessage(win: GlimpseWindow, data: unknown): Promise<
 		await runCopy(win, "png", () => copyPngToClipboard(Buffer.from(base64, "base64")));
 		return;
 	}
+
+	if (msg.type === "rpc-result" && typeof msg.id === "string") {
+		const entry = pendingRpcs.get(msg.id);
+		if (!entry) return;
+		pendingRpcs.delete(msg.id);
+		entry.cleanup();
+		if (msg.ok) entry.resolve(msg.data);
+		else entry.reject(new Error(typeof msg.error === "string" ? msg.error : "Webview RPC failed"));
+		return;
+	}
+}
+
+/** Settle a pending RPC by id, running its cleanup and rejecting with `err`.
+ *  No-op when the RPC has already settled. */
+function failPendingRpc(id: string, err: Error): void {
+	const entry = pendingRpcs.get(id);
+	if (!entry) return;
+	pendingRpcs.delete(id);
+	entry.cleanup();
+	entry.reject(err);
+}
+
+/** Send an RPC request to the webview and wait for its reply. Honors the
+ *  caller's AbortSignal and a per-call timeout. */
+function callWebviewRpc<T = unknown>(
+	method: string,
+	args: Record<string, unknown>,
+	timeoutMs: number,
+	signal?: AbortSignal,
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		if (!activeWindow) {
+			reject(new Error("Preview window is not open. Call draw_diagram or draw_mermaid_diagram first."));
+			return;
+		}
+		if (signal?.aborted) {
+			reject(new Error("Aborted before RPC dispatch"));
+			return;
+		}
+		const id = crypto.randomUUID();
+		const timer = setTimeout(
+			() => failPendingRpc(id, new Error(`Webview RPC "${method}" timed out after ${timeoutMs}ms`)),
+			timeoutMs,
+		);
+		const onAbort = () => failPendingRpc(id, new Error(`Webview RPC "${method}" aborted`));
+		signal?.addEventListener("abort", onAbort);
+		pendingRpcs.set(id, {
+			resolve: (data) => resolve(data as T),
+			reject,
+			cleanup: () => {
+				clearTimeout(timer);
+				signal?.removeEventListener("abort", onAbort);
+			},
+		});
+		activeWindow.send(`window.__piRpcRequest?.(${JSON.stringify({ method, id, args })})`);
+	});
 }
 
 /** Open a fresh preview window and return a promise that resolves on "ready". */
@@ -225,9 +307,18 @@ const DrawParams = Type.Object({
 });
 
 const SaveParams = Type.Object({
-	path: Type.String({
-		description: "Output file path (relative to cwd). Conventionally ends with .excalidraw.",
-	}),
+	name: Type.Optional(
+		Type.String({
+			description:
+				"Diagram name. Saved to .pi/excalidraw-diagrams/<slug>.excalidraw. Preferred form so list_diagrams / load_diagram can find it.",
+		}),
+	),
+	path: Type.Optional(
+		Type.String({
+			description:
+				"Explicit output path (relative to cwd). Use only when you need a custom location; otherwise prefer `name`.",
+		}),
+	),
 	checkpoint_id: Type.Optional(
 		Type.String({
 			description: "Checkpoint id to save. Defaults to the most recent draw_diagram result.",
@@ -235,28 +326,105 @@ const SaveParams = Type.Object({
 	),
 });
 
-/** Build the Excalidraw v2 file format wrapper around an element array. */
-function buildExcalidrawFile(elements: ExcalidrawElement[]): Record<string, unknown> {
-	return {
-		type: "excalidraw",
-		version: 2,
-		source: "https://excalidraw.com",
-		elements,
-		appState: { gridSize: null, viewBackgroundColor: "#ffffff" },
-		files: {},
-	};
+const LoadParams = Type.Object({
+	name: Type.Optional(
+		Type.String({
+			description: "Diagram name (slug, filename, or basename) under .pi/excalidraw-diagrams/.",
+		}),
+	),
+	path: Type.Optional(
+		Type.String({
+			description: "Explicit path to a .excalidraw file (relative to cwd or absolute).",
+		}),
+	),
+});
+
+const MermaidParams = Type.Object({
+	definition: Type.String({
+		description:
+			"Mermaid diagram source (e.g. 'flowchart TD\\n  A[Start] --> B[End]'). Supported: flowchart, sequence, class, ER. Other types render as images.",
+	}),
+});
+
+/** Generate a short opaque checkpoint id (18 hex chars from a UUID v4). */
+function generateCheckpointId(): string {
+	return crypto.randomUUID().replace(/-/g, "").slice(0, 18);
 }
 
-/** Tool result `details` payload returned by draw_diagram and save_diagram. */
+/** Store `elements` under a fresh checkpoint id, mark it as the latest, and
+ *  return the new id. Centralises the small bookkeeping every render path does. */
+function recordCheckpoint(elements: ExcalidrawElement[]): string {
+	const id = generateCheckpointId();
+	checkpoints.set(id, elements);
+	lastCheckpointId = id;
+	return id;
+}
+
+/** Validate that exactly one of `name` / `path` was provided. Returns an
+ *  errorResult to short-circuit the tool, or null when validation passed. */
+function requireOneOfNameOrPath(
+	params: { name?: string; path?: string },
+	toolName: string,
+): ToolResult | null {
+	if (!params.name && !params.path) {
+		return errorResult(`Provide either \`name\` or \`path\` to ${toolName}.`);
+	}
+	if (params.name && params.path) {
+		return errorResult("Provide only one of `name` or `path`, not both.");
+	}
+	return null;
+}
+
+/** Pick the first stringy field for renderCall labels (name preferred, path
+ *  as fallback). */
+function nameOrPathLabel(args: Record<string, unknown>): string {
+	if (typeof args.name === "string") return args.name;
+	if (typeof args.path === "string") return args.path;
+	return "";
+}
+
+/** Saved-diagram metadata exposed by list_diagrams. */
+interface DiagramListing {
+	name: string;
+	path: string;
+	elementCount: number;
+	modifiedAt: string;
+	sizeBytes: number;
+}
+
+/** Tool result `details` payload returned by the registered tools. */
 type ToolDetails =
 	| { error: string }
 	| { checkpointId: string; elementCount: number }
-	| { path: string; checkpointId: string; elementCount: number };
+	| { path: string; checkpointId: string; elementCount: number }
+	| { path: string; checkpointId: string; elementCount: number; loaded: true }
+	| { directory: string; count: number; diagrams: DiagramListing[] }
+	| { elementCount: number; mimeType: string; checkpointId: string }
+	| undefined;
 
-/** Tool result envelope shared by draw_diagram and save_diagram. */
+/** Tool result envelope shared by all registered tools. The content array uses
+ *  the same {text}/{image} variants pi-coding-agent expects from tool results. */
+type ToolContent =
+	| { type: "text"; text: string }
+	| { type: "image"; data: string; mimeType: string };
 interface ToolResult {
-	content: { type: "text"; text: string }[];
+	content: ToolContent[];
 	details: ToolDetails;
+}
+
+/** Theme slot subset used by our renderCalls. Narrower than pi-tui's full
+ *  ThemeColor union, but contravariantly compatible — a Theme.fg that accepts
+ *  any ThemeColor satisfies a parameter that only ever passes these two. */
+type ToolTitleTheme = {
+	fg: (slot: "toolTitle" | "muted", s: string) => string;
+	bold: (s: string) => string;
+};
+
+/** Build a `theme.fg("toolTitle", theme.bold(name))` Text widget, with optional
+ *  muted suffix. Centralises the chrome shared by every tool's renderCall. */
+function toolTitle(theme: ToolTitleTheme, name: string, suffix?: string): Text {
+	const title = theme.fg("toolTitle", theme.bold(suffix ? `${name} ` : name));
+	return new Text(suffix ? title + theme.fg("muted", suffix) : title, 0, 0);
 }
 
 /** Build a tool error result with a user-facing message. */
@@ -265,16 +433,6 @@ function errorResult(message: string): ToolResult {
 		content: [{ type: "text", text: message }],
 		details: { error: message },
 	};
-}
-
-/** Best-effort element count for the streaming-tool-call status line. Returns
- *  the number for valid array input, or an ellipsis while input is partial. */
-function countElements(elementsStr: string): number | string {
-	try {
-		const v = JSON.parse(elementsStr);
-		if (Array.isArray(v)) return v.length;
-	} catch { /* partial JSON — fall through */ }
-	return "…";
 }
 
 /** Pi extension entry point: registers Excalidraw tools and the /excalidraw command. */
@@ -311,9 +469,7 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 				return errorResult(errorMessage(e));
 			}
 
-			const checkpointId = crypto.randomUUID().replace(/-/g, "").slice(0, 18);
-			checkpoints.set(checkpointId, resolved);
-			lastCheckpointId = checkpointId;
+			const checkpointId = recordCheckpoint(resolved);
 
 			try {
 				await ensureWindow({ elements: resolved, viewport });
@@ -323,8 +479,9 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 
 			const text =
 				`Diagram rendered (${resolved.length} elements). Checkpoint id: "${checkpointId}".\n` +
-				`To extend it, prefix your next draw_diagram call with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...new elements...].\n` +
-				`To remove elements, include {"type":"delete","ids":"id1,id2"}.\n` +
+				`Next step: call screenshot_diagram to visually verify the layout (overlaps, truncated text, off-camera elements, low contrast). ` +
+				`If anything looks wrong, fix it with another draw_diagram call prefixed with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...] and use {"type":"delete","ids":"id1,id2"} to remove broken pieces. ` +
+				`Repeat screenshot_diagram → fix until the diagram looks correct, then summarise for the user.\n` +
 				`To save the file, call save_diagram with a path.`;
 
 			return {
@@ -335,11 +492,7 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 
 		renderCall(args, theme) {
 			const count = countElements(typeof args.elements === "string" ? args.elements : "");
-			return new Text(
-				theme.fg("toolTitle", theme.bold("draw_diagram ")) + theme.fg("muted", `(${count} elements)`),
-				0,
-				0,
-			);
+			return toolTitle(theme, "draw_diagram", `(${count} elements)`);
 		},
 	});
 
@@ -357,23 +510,211 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 			const elements = checkpoints.get(id);
 			if (!elements) return errorResult(`Checkpoint "${id}" not found.`);
 
-			const outPath = path.isAbsolute(params.path) ? params.path : path.join(ctx.cwd, params.path);
+			const invalid = requireOneOfNameOrPath(params, "save_diagram");
+			if (invalid) return invalid;
+
+			const outPath = resolveDiagramPath(ctx.cwd, { name: params.name, path: params.path });
 			await fs.mkdir(path.dirname(outPath), { recursive: true });
 			await fs.writeFile(outPath, JSON.stringify(buildExcalidrawFile(elements), null, 2), "utf8");
 
 			return {
-				content: [{ type: "text", text: `Saved diagram to ${outPath}` }],
+				content: [{ type: "text", text: `Saved diagram to ${relativeDisplay(ctx.cwd, outPath)}` }],
 				details: { path: outPath, checkpointId: id, elementCount: elements.length },
 			};
 		},
 
 		renderCall(args, theme) {
-			const p = typeof args.path === "string" ? args.path : "";
-			return new Text(
-				theme.fg("toolTitle", theme.bold("save_diagram ")) + theme.fg("muted", p),
-				0,
-				0,
-			);
+			return toolTitle(theme, "save_diagram", nameOrPathLabel(args));
+		},
+	});
+
+	pi.registerTool({
+		name: "list_diagrams",
+		label: "list_diagrams",
+		description:
+			"List previously saved Excalidraw diagrams under .pi/excalidraw-diagrams/. Use before load_diagram to see what is available.",
+		parameters: Type.Object({}),
+
+		async execute(_toolCallId, _params, _signal, _onUpdate, ctx): Promise<ToolResult> {
+			const dir = path.join(ctx.cwd, DEFAULT_DIAGRAM_DIR);
+			let entries: string[];
+			try { entries = await fs.readdir(dir); }
+			catch {
+				return {
+					content: [{ type: "text", text: `No saved diagrams (directory ${DEFAULT_DIAGRAM_DIR} not found).` }],
+					details: { directory: dir, count: 0, diagrams: [] },
+				};
+			}
+
+			const diagrams: DiagramListing[] = [];
+			for (const entry of entries) {
+				if (!entry.toLowerCase().endsWith(".excalidraw")) continue;
+				const full = path.join(dir, entry);
+				try {
+					const [stat, body] = await Promise.all([
+						fs.stat(full),
+						fs.readFile(full, "utf8"),
+					]);
+					let count = 0;
+					try { count = parseExcalidrawFile(body).length; } catch { /* keep 0 on parse error */ }
+					diagrams.push({
+						name: entry.replace(/\.excalidraw$/i, ""),
+						path: full,
+						elementCount: count,
+						modifiedAt: stat.mtime.toISOString(),
+						sizeBytes: stat.size,
+					});
+				} catch { /* skip unreadable entries */ }
+			}
+			diagrams.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+
+			const lines = diagrams.length
+				? diagrams.map((d) => `  - ${d.name} (${d.elementCount} el, ${d.modifiedAt})`).join("\n")
+				: "  (none)";
+			return {
+				content: [{ type: "text", text: `Saved diagrams in ${DEFAULT_DIAGRAM_DIR}:\n${lines}` }],
+				details: { directory: dir, count: diagrams.length, diagrams },
+			};
+		},
+
+		renderCall(_args, theme) {
+			return toolTitle(theme, "list_diagrams");
+		},
+	});
+
+	pi.registerTool({
+		name: "load_diagram",
+		label: "load_diagram",
+		description:
+			"Load a previously saved .excalidraw file into the preview, register it as a checkpoint, and return its id so you can extend it via {\"type\":\"restoreCheckpoint\",\"id\":\"<id>\"} in the next draw_diagram call.",
+		parameters: LoadParams,
+
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx): Promise<ToolResult> {
+			const invalid = requireOneOfNameOrPath(params, "load_diagram");
+			if (invalid) return invalid;
+
+			let absPath: string | null;
+			if (params.path) {
+				absPath = path.isAbsolute(params.path) ? params.path : path.join(ctx.cwd, params.path);
+			} else {
+				absPath = await findDiagramByName(ctx.cwd, params.name!);
+				if (!absPath) return errorResult(`No saved diagram named "${params.name}" in ${DEFAULT_DIAGRAM_DIR}.`);
+			}
+
+			let body: string;
+			try { body = await fs.readFile(absPath, "utf8"); }
+			catch (e) { return errorResult(`Failed to read ${absPath}: ${errorMessage(e)}`); }
+
+			let elements: ExcalidrawElement[];
+			try { elements = parseExcalidrawFile(body); }
+			catch (e) { return errorResult(`Failed to parse ${absPath}: ${errorMessage(e)}`); }
+
+			const checkpointId = recordCheckpoint(elements);
+
+			try { await ensureWindow({ elements, viewport: null }); }
+			catch (e) { return errorResult(`Preview window failed: ${errorMessage(e)}`); }
+
+			const text =
+				`Loaded diagram from ${relativeDisplay(ctx.cwd, absPath)} (${elements.length} elements). Checkpoint id: "${checkpointId}".\n` +
+				`To extend it, prefix your next draw_diagram call with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...new elements...].`;
+			return {
+				content: [{ type: "text", text }],
+				details: { path: absPath, checkpointId, elementCount: elements.length, loaded: true },
+			};
+		},
+
+		renderCall(args, theme) {
+			return toolTitle(theme, "load_diagram", nameOrPathLabel(args));
+		},
+	});
+
+	pi.registerTool({
+		name: "screenshot_diagram",
+		label: "screenshot_diagram",
+		description:
+			"Capture a PNG screenshot of the current diagram and return it as an image you can visually inspect. Use after draw_diagram to verify layout, label readability, and alignment, then iterate with another draw_diagram call if needed.",
+		parameters: Type.Object({}),
+
+		async execute(_toolCallId, _params, signal): Promise<ToolResult> {
+			if (!lastCheckpointId) return errorResult("No diagram to screenshot — call draw_diagram first.");
+			if (!activeWindow) return errorResult("Preview window is not open. Call draw_diagram first.");
+
+			let result: { base64: string; count: number };
+			try {
+				result = await callWebviewRpc("screenshot", {}, 15_000, signal);
+			} catch (e) {
+				return errorResult(`Screenshot failed: ${errorMessage(e)}`);
+			}
+
+			if (!result.base64) return errorResult("Diagram is empty — nothing to screenshot.");
+
+			return {
+				content: [
+					{ type: "text", text: `Screenshot of ${result.count} element(s) attached for visual inspection.` },
+					{ type: "image", data: result.base64, mimeType: "image/png" },
+				],
+				details: {
+					elementCount: result.count,
+					mimeType: "image/png",
+					checkpointId: lastCheckpointId,
+				},
+			};
+		},
+
+		renderCall(_args, theme) {
+			return toolTitle(theme, "screenshot_diagram");
+		},
+	});
+
+	pi.registerTool({
+		name: "draw_mermaid_diagram",
+		label: "draw_mermaid_diagram",
+		description:
+			"Render a Mermaid diagram (flowchart, sequence, class, ER, etc.) by converting it to native Excalidraw elements in the preview. Returns a checkpoint id you can extend via {\"type\":\"restoreCheckpoint\",\"id\":\"<id>\"} in a follow-up draw_diagram call.",
+		parameters: MermaidParams,
+
+		async execute(_toolCallId, params, signal): Promise<ToolResult> {
+			if (!params.definition?.trim()) return errorResult("Mermaid `definition` is required.");
+
+			// Open the preview window first so the webview is ready to receive
+			// the conversion RPC. The mermaid module loads lazily inside the
+			// webview on first use.
+			try {
+				if (!windowReadyPromise) windowReadyPromise = openPreviewWindow();
+				await windowReadyPromise;
+			} catch (e) {
+				return errorResult(`Preview window failed: ${errorMessage(e)}`);
+			}
+
+			let result: { elements: ExcalidrawElement[]; count: number };
+			try {
+				result = await callWebviewRpc("mermaid", { definition: params.definition }, 30_000, signal);
+			} catch (e) {
+				return errorResult(`Mermaid conversion failed: ${errorMessage(e)}`);
+			}
+
+			const elements = result.elements ?? [];
+			if (!elements.length) return errorResult("Mermaid produced no elements — the diagram may be invalid or unsupported.");
+
+			const checkpointId = recordCheckpoint(elements);
+
+			try { await ensureWindow({ elements, viewport: null }); }
+			catch (e) { return errorResult(`Preview window failed: ${errorMessage(e)}`); }
+
+			const text =
+				`Mermaid diagram rendered (${elements.length} elements). Checkpoint id: "${checkpointId}".\n` +
+				`Next step: call screenshot_diagram to visually verify the layout. ` +
+				`If anything looks wrong, fix it with another draw_diagram call prefixed with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...] and use {"type":"delete","ids":"id1,id2"} to remove broken pieces. ` +
+				`Repeat screenshot_diagram → fix until the diagram looks correct, then summarise for the user.\n` +
+				`To save it, call save_diagram with a name.`;
+			return {
+				content: [{ type: "text", text }],
+				details: { checkpointId, elementCount: elements.length },
+			};
+		},
+
+		renderCall(_args, theme) {
+			return toolTitle(theme, "draw_mermaid_diagram");
 		},
 	});
 

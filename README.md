@@ -57,7 +57,11 @@ Then `/reload` in pi.
 | Tool | Description |
 |------|-------------|
 | `draw_diagram` | Render an array of Excalidraw elements in a glimpse preview window. Streams partial JSON so long diagrams update incrementally. |
-| `save_diagram` | Write the most recent diagram to a `.excalidraw` file. |
+| `draw_mermaid_diagram` | Convert a Mermaid diagram (flowchart, sequence, class, ER) into native Excalidraw elements and render in the same preview. |
+| `screenshot_diagram` | Capture the current preview as a PNG and return it as image content so the model can visually inspect and self-correct. |
+| `save_diagram` | Write the current diagram to a `.excalidraw` file. Pass `name` to save under `.pi/excalidraw-diagrams/`, or `path` for a custom location. |
+| `list_diagrams` | List previously saved diagrams under `.pi/excalidraw-diagrams/`. |
+| `load_diagram` | Load a saved `.excalidraw` file back into the preview as a new checkpoint so you can extend it with more `draw_diagram` calls. |
 
 ### Command
 
@@ -87,11 +91,35 @@ id back so the next call extends the same canvas instead of replacing it.
 When you're happy:
 
 ```
-save it to docs/oauth.excalidraw
+save it as oauth-flow
 ```
 
-`save_diagram` writes the canonical `.excalidraw` JSON to that path, ready
-to open in [excalidraw.com](https://excalidraw.com) or any Excalidraw editor.
+`save_diagram` writes the canonical `.excalidraw` JSON to
+`.pi/excalidraw-diagrams/oauth-flow.excalidraw` (or a custom `path` if you
+prefer), ready to open in [excalidraw.com](https://excalidraw.com) or any
+Excalidraw editor.
+
+Resume later:
+
+```
+list saved diagrams, then load oauth-flow and add a refresh-token step
+```
+
+`load_diagram` restores the file as a fresh checkpoint; the next
+`draw_diagram` call extends it via `restoreCheckpoint`.
+
+Visual self-check (sends a screenshot back to the model so it can see what
+it drew):
+
+```
+take a screenshot and check if the labels overlap
+```
+
+Mermaid shortcut:
+
+```
+draw the OAuth flow as a mermaid sequence diagram
+```
 
 ---
 
