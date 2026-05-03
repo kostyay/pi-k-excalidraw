@@ -2,22 +2,32 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.0] - 2026-05-03
 
+Adds a full diagramming workflow on top of the v0.1.0 preview tool. Four new
+tools land alongside `draw_diagram`: `draw_mermaid_diagram` converts Mermaid
+flowcharts/sequences/class/ER sources into native Excalidraw elements in the
+webview ([#1](https://github.com/kostyay/pi-k-excalidraw/pull/1)),
+`screenshot_diagram` exports the current canvas as a PNG so the model can
+visually self-correct overlaps and off-camera elements, and
+`load_diagram` / `list_diagrams` browse and restore diagrams persisted under
+`.pi/excalidraw-diagrams/<slug>.excalidraw`. The `/excalidraw` command now
+arms a post-turn review loop that prompts the user to send the screenshot
+back to the LLM with optional comments for another refinement pass.
 
+Window lifecycle is consolidated behind a single `startPreviewWindow()`
+helper that clears the cached promise on failure so the next call retries
+instead of being permanently wedged
+([#3](https://github.com/kostyay/pi-k-excalidraw/pull/3)). `glimpseui` is
+now a declared runtime dependency in `package.json` rather than relying on
+fallback path resolution from `process.execPath`, with a friendlier error
+pointing at the install URL when it can't be resolved.
 
-
-
-## refactor/glimpseui-window-handling
-
-Refactored glimpseui window lifecycle management to improve reliability and robustness (#3). The preview window now uses a consolidated `startPreviewWindow()` helper that prevents promise rejection from permanently blocking future attempts, with clearer error handling that distinguishes between setup failures and runtime operation. Updated glimpseui to be a declared runtime dependency in `package.json` (v0.8.0) rather than relying on fallback path resolution, simplifying deployment and making installation requirements explicit. Enhanced documentation with a 30-second demo video and expanded "How it works" section covering the review loop, checkpoint/delete mechanics, screenshot self-correction, and Mermaid-to-Excalidraw conversion.
-
-## [0.1.0](https://github.com/kostyay/pi-k-excalidraw/pull/2) - 2026-05-03
-
-Added comprehensive architecture documentation for the pi-k-excalidraw extension (#2), including a detailed Excalidraw diagram that visualizes the interaction between the LLM agent, extension components (index.ts, parser.ts, diagrams.ts), registered tools (draw_diagram, draw_mermaid, screenshot, save/load), system prompts, and the Glimpse webview preview powered by @excalidraw/excalidraw. The refactored codebase clarifies the tool registration flow, RPC communication channels between host and webview, and filesystem persistence patterns for diagram storage in `.pi/excalidraw-diagrams/`. This documentation serves as a reference guide for understanding the extension's modular architecture and agent-driven diagram generation workflow.
-
-## [0.1.0](https://github.com/kostyay/pi-k-excalidraw/pull/1) - 2026-05-03
-
-Introduces comprehensive diagram tooling and code quality gates for the Excalidraw extension (#1). Adds four new tools—`draw_mermaid_diagram` for converting Mermaid flowcharts/sequences to native Excalidraw elements, `screenshot_diagram` for visual self-correction, `load_diagram` to restore saved diagrams as checkpoints, and `list_diagrams` to browse the diagram library—alongside persistent storage under `.pi/excalidraw-diagrams/` with slug-based naming. Extracts diagram helpers (`slugifyDiagramName`, `parseExcalidrawFile`, `resolveDiagramPath`, etc.) into a testable `diagrams.ts` module with comprehensive unit tests, and introduces ESLint with a pragmatic TypeScript config to catch syntax errors and obvious bugs while filtering noisy stylistic rules. CI now runs linting before typecheck, enforcing code quality gates on every commit.
+Code quality gates added: ESLint with a pragmatic TypeScript config, a
+testable `diagrams.ts` module with full unit tests for the slug/path/parse
+helpers, and CI that runs lint before typecheck. Documentation gains an
+architecture diagram ([#2](https://github.com/kostyay/pi-k-excalidraw/pull/2))
+and an embedded GIF walkthrough of `/excalidraw` driving the live preview.
 
 ## [0.1.0] - 2026-05-03
 

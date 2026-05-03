@@ -1,6 +1,6 @@
 {
   "name": "pi-k-excalidraw",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Native Excalidraw diagram preview tool for pi — draw and save diagrams from the agent with a live glimpse webview.",
   "keywords": [
