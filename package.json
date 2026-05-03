@@ -26,6 +26,7 @@
   "engines": {
     "node": ">=22"
   },
+  "private": true,
   "pi": {
     "extensions": [
       "./extensions"
@@ -34,13 +35,6 @@
       "./extensions/pi-k-excalidraw/prompts"
     ]
   },
-  "files": [
-    "extensions",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
-    "package.json"
-  ],
   "scripts": {
     "test": "node --experimental-strip-types --test extensions/pi-k-excalidraw/*.test.ts",
     "typecheck": "tsc --noEmit"

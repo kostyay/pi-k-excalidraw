@@ -22,8 +22,19 @@ reimplemented natively against the pi extension API.
 ## Install
 
 ```bash
-pi install npm:pi-k-excalidraw
+# latest from main
+pi install git:github.com/kostyay/pi-k-excalidraw
+
+# pin to a release
+pi install git:github.com/kostyay/pi-k-excalidraw@v0.1.0
+
+# try without installing
+pi -e git:github.com/kostyay/pi-k-excalidraw
 ```
+
+Pi clones the repo, runs `npm install`, and registers the extension. Use
+`-l` to install into the current project (`.pi/settings.json`) instead of
+globally.
 
 <details>
 <summary>Manual install</summary>
