@@ -6,6 +6,10 @@
 
 **[Install](#install)** · **[Usage](#usage)** · **[How it works](#how-it-works)**
 
+<video src="media/demo.mp4" controls muted playsinline width="720"></video>
+
+*↗ click play — ≈ 30 s walkthrough of `/excalidraw` driving a live preview.*
+
 </div>
 
 *Let pi draw Excalidraw diagrams that preview live in a glimpse window — no
@@ -41,7 +45,9 @@ globally.
 
 ```bash
 git clone https://github.com/kostyay/pi-k-excalidraw.git
-cp -r pi-k-excalidraw/extensions/pi-k-excalidraw ~/.pi/agent/extensions/
+cd pi-k-excalidraw
+npm install            # pulls in glimpseui, the webview host
+cp -r extensions/pi-k-excalidraw ~/.pi/agent/extensions/
 ```
 
 Then `/reload` in pi.
