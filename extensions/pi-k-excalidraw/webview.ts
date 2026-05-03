@@ -54,8 +54,8 @@ const STYLES = `
   .excalidraw-container .excalidraw .layer-ui__wrapper__footer-center { display: none !important; }
   .excalidraw-container .excalidraw .App-menu_top__left { visibility: hidden !important; }
 
-  /* Lift the zoom-control footer above our Copy SVG button + status text. */
-  .excalidraw-container .excalidraw .layer-ui__wrapper__footer-left { z-index: 15 !important; }
+  /* Hide the native zoom footer — we render our own #zoom-controls widget. */
+  .excalidraw-container .excalidraw .layer-ui__wrapper__footer-left { display: none !important; }
 
   /* Excalidraw's dark theme normally applies an invert+hue-rotate filter to the
      canvas which clamps the darkest renderable color to ~#121212. We disable it
@@ -113,6 +113,53 @@ const STYLES = `
   #theme-toggle .moon, #theme-toggle .sun { display: none; }
   body:not(.dark) #theme-toggle .moon { display: block; }
   body.dark #theme-toggle .sun { display: block; }
+
+  /* Bottom-left zoom widget: − / 100% / + in a single rounded pill. */
+  #zoom-controls {
+    position: fixed; bottom: 12px; left: 12px; z-index: 20;
+    display: inline-flex; align-items: stretch; overflow: hidden;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.12); border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    font: 500 12px system-ui, -apple-system, sans-serif; color: #1a1a1a;
+    user-select: none;
+  }
+  #zoom-controls button {
+    background: transparent; border: 0; color: inherit; font: inherit;
+    padding: 6px 10px; min-width: 32px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  #zoom-controls button:hover { background: rgba(0, 0, 0, 0.06); }
+  #zoom-controls button:active { background: rgba(0, 0, 0, 0.1); }
+  #zoom-controls #zoom-level { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  body.dark #zoom-controls {
+    background: rgba(40, 40, 45, 0.92); border-color: rgba(255, 255, 255, 0.12); color: #e5e5e5;
+  }
+  body.dark #zoom-controls button:hover { background: rgba(255, 255, 255, 0.08); }
+  body.dark #zoom-controls button:active { background: rgba(255, 255, 255, 0.14); }
+
+  /* Top-center pan hint. Muted by default, fades out after first interaction. */
+  #canvas-hint {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 10; pointer-events: none;
+    font: 12px system-ui, -apple-system, sans-serif; color: #888;
+    white-space: nowrap;
+    transition: opacity 0.4s ease;
+  }
+  #canvas-hint.hidden { opacity: 0; }
+  body.dark #canvas-hint { color: #888; }
+  #canvas-hint kbd {
+    display: inline-block; padding: 1px 6px; margin: 0 2px;
+    font: inherit; color: inherit;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.18); border-bottom-width: 2px;
+    border-radius: 4px;
+  }
+  body.dark #canvas-hint kbd {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
 `;
 
 /**
@@ -158,6 +205,14 @@ export function getWebviewHtml(): string {
     <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="9" height="9" rx="1.5"/><path d="M3 10V3a1 1 0 0 1 1-1h7"/></svg>
     <span>Copy SVG</span>
   </button>
+  <div id="zoom-controls" hidden>
+    <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+    <button id="zoom-level" type="button" title="Reset zoom to 100%" aria-label="Reset zoom">100%</button>
+    <button id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+  </div>
+  <div id="canvas-hint" hidden>
+    To move canvas, hold <kbd>Scroll wheel</kbd> or <kbd>Space</kbd> while dragging
+  </div>
   <div id="status"></div>
   <script>
     // Buffer payloads that arrive BEFORE the React module finishes loading.
@@ -289,6 +344,73 @@ export function getWebviewHtml(): string {
         },
       },
     ];
+
+    /** Set zoom while keeping the viewport center fixed. Excalidraw applies
+     *  zoom around screen origin by default, so we adjust scrollX/scrollY to
+     *  compensate. Clamps to a sane range so the canvas stays usable. */
+    const ZOOM_STEP = 1.1;
+    const ZOOM_MIN = 0.1;
+    const ZOOM_MAX = 30;
+    function setZoom(api, nextZoom) {
+      const z2 = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextZoom));
+      const { zoom, scrollX, scrollY } = api.getAppState();
+      const z1 = zoom.value;
+      if (z1 === z2) return;
+      const w = window.innerWidth, h = window.innerHeight;
+      api.updateScene({
+        appState: {
+          zoom: { value: z2 },
+          scrollX: scrollX + (w / 2) * (1 / z2 - 1 / z1),
+          scrollY: scrollY + (h / 2) * (1 / z2 - 1 / z1),
+        },
+      });
+    }
+
+    /** Reveal the top-center pan hint, then auto-fade after a few seconds.
+     *  Also dismisses on first canvas interaction (wheel / mousedown / keydown). */
+    function wireCanvasHint() {
+      const hint = document.getElementById("canvas-hint");
+      if (!hint) return;
+      hint.hidden = false;
+      let dismissed = false;
+      const dismiss = () => {
+        if (dismissed) return;
+        dismissed = true;
+        hint.classList.add("hidden");
+      };
+      const fadeTimer = setTimeout(dismiss, 6000);
+      const onInteract = () => { clearTimeout(fadeTimer); dismiss(); };
+      const opts = { once: true, passive: true };
+      window.addEventListener("wheel", onInteract, opts);
+      window.addEventListener("mousedown", onInteract, opts);
+      window.addEventListener("keydown", onInteract, opts);
+    }
+
+    /** Wire the bottom-left zoom widget. The percent display is refreshed on
+     *  every animation frame so wheel/pinch gestures stay in sync. */
+    function wireZoomControls(api) {
+      const panel = document.getElementById("zoom-controls");
+      const out = document.getElementById("zoom-out");
+      const reset = document.getElementById("zoom-level");
+      const inn = document.getElementById("zoom-in");
+      if (!panel || !out || !reset || !inn) return;
+      panel.hidden = false;
+
+      out.onclick = () => setZoom(api, api.getAppState().zoom.value / ZOOM_STEP);
+      inn.onclick = () => setZoom(api, api.getAppState().zoom.value * ZOOM_STEP);
+      reset.onclick = () => setZoom(api, 1);
+
+      let lastShown = -1;
+      const tick = () => {
+        const z = api.getAppState().zoom.value;
+        if (z !== lastShown) {
+          reset.textContent = Math.round(z * 100) + "%";
+          lastShown = z;
+        }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }
 
     /** Send an RPC success/failure reply over the glimpse reverse channel. */
     function rpcOk(id, data) { window.glimpse.send({ type: "rpc-result", id, ok: true, data }); }
@@ -438,6 +560,8 @@ export function getWebviewHtml(): string {
           if (pending.current) { tryApply(pending.current); pending.current = null; }
           wireThemeToggle(api);
           wireCopyButtons(api);
+          wireZoomControls(api);
+          wireCanvasHint();
           wireRpc(api);
         }
       }, [api, fontsReady]);

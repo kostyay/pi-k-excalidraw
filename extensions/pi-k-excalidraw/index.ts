@@ -479,8 +479,9 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 
 			const text =
 				`Diagram rendered (${resolved.length} elements). Checkpoint id: "${checkpointId}".\n` +
-				`To extend it, prefix your next draw_diagram call with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...new elements...].\n` +
-				`To remove elements, include {"type":"delete","ids":"id1,id2"}.\n` +
+				`Next step: call screenshot_diagram to visually verify the layout (overlaps, truncated text, off-camera elements, low contrast). ` +
+				`If anything looks wrong, fix it with another draw_diagram call prefixed with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...] and use {"type":"delete","ids":"id1,id2"} to remove broken pieces. ` +
+				`Repeat screenshot_diagram → fix until the diagram looks correct, then summarise for the user.\n` +
 				`To save the file, call save_diagram with a path.`;
 
 			return {
@@ -702,7 +703,9 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 
 			const text =
 				`Mermaid diagram rendered (${elements.length} elements). Checkpoint id: "${checkpointId}".\n` +
-				`To extend it, prefix your next draw_diagram call with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...new elements...].\n` +
+				`Next step: call screenshot_diagram to visually verify the layout. ` +
+				`If anything looks wrong, fix it with another draw_diagram call prefixed with [{"type":"restoreCheckpoint","id":"${checkpointId}"}, ...] and use {"type":"delete","ids":"id1,id2"} to remove broken pieces. ` +
+				`Repeat screenshot_diagram → fix until the diagram looks correct, then summarise for the user.\n` +
 				`To save it, call save_diagram with a name.`;
 			return {
 				content: [{ type: "text", text }],
