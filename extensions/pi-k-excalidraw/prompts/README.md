@@ -36,6 +36,20 @@ message is dispatched.
   [excalidraw-mcp](https://github.com/excalidraw/excalidraw-mcp).
 - **Local edits**: tool name `draw_diagram`; `{{task}}` placeholder added.
 
+### `review-instruction.md`
+
+Follow-up user-message template sent by the `/excalidraw` review loop. After
+each drawing turn the extension prompts the user (`ctx.ui.confirm` +
+`ctx.ui.input`) to optionally request another review pass; when accepted, this
+template is sent with a fresh screenshot attached as an image. Placeholders:
+
+- `{{comments}}` — user's free-form feedback, or a default "no specific
+  comments" line when left empty.
+- `{{checkpointId}}` — the most recent diagram checkpoint id, so the LLM can
+  extend the existing canvas via `restoreCheckpoint` instead of redrawing.
+
+Local-only prompt (no upstream).
+
 ## Adding a new prompt
 
 1. Drop a new `*.md` file into this directory.
