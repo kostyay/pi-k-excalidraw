@@ -33,43 +33,43 @@ const STYLES = `
     height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: #ffffff;
-    transition: background 0.2s ease;
   }
-  body.dark { background: #000000; }
 
   .excalidraw-container { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
   .excalidraw-container .excalidraw .SVGLayer { display: none !important; }
 
-  /* Hide editing chrome — keep zoom/pan controls (footer-left) so users can navigate. */
-  .excalidraw-container .excalidraw .App-menu,
-  .excalidraw-container .excalidraw .App-toolbar,
-  .excalidraw-container .excalidraw .App-menu_top,
-  .excalidraw-container .excalidraw .undo-redo-buttons,
-  .excalidraw-container .excalidraw .HelpButton,
-  .excalidraw-container .excalidraw .UserList,
-  .excalidraw-container .excalidraw .main-menu-trigger,
-  .excalidraw-container .excalidraw .welcome-screen-center,
-  .excalidraw-container .excalidraw .welcome-screen-menu-hintContainer,
-  .excalidraw-container .excalidraw .layer-ui__wrapper__footer-right,
-  .excalidraw-container .excalidraw .layer-ui__wrapper__footer-center { display: none !important; }
-  .excalidraw-container .excalidraw .App-menu_top__left { visibility: hidden !important; }
+  /* Hide editing chrome by default — keep zoom/pan controls so users can navigate.
+     The body.edit-mode class overrides these rules to reveal the native Excalidraw
+     toolbar, menus, and undo/redo so the user can directly customise the diagram. */
+  body:not(.edit-mode) .excalidraw-container .excalidraw .App-menu,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .App-toolbar,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .App-menu_top,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .undo-redo-buttons,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .HelpButton,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .UserList,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .main-menu-trigger,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .welcome-screen-center,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .welcome-screen-menu-hintContainer,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .layer-ui__wrapper__footer-right,
+  body:not(.edit-mode) .excalidraw-container .excalidraw .layer-ui__wrapper__footer-center { display: none !important; }
+  body:not(.edit-mode) .excalidraw-container .excalidraw .App-menu_top__left { visibility: hidden !important; }
 
   /* Hide the native zoom footer — we render our own #zoom-controls widget. */
   .excalidraw-container .excalidraw .layer-ui__wrapper__footer-left { display: none !important; }
 
-  /* Excalidraw's dark theme normally applies an invert+hue-rotate filter to the
-     canvas which clamps the darkest renderable color to ~#121212. We disable it
-     so viewBackgroundColor wins and dark mode can actually be true black. */
-  .excalidraw-container .excalidraw.theme--dark canvas { filter: none !important; }
+  /* Hide the native help icon even in edit mode — it would overlap our chrome. */
+  body.edit-mode .excalidraw-container .excalidraw .help-icon { display: none !important; }
+
+  /* Hide the library sidebar trigger in all modes — we don't surface user libraries. */
+  .excalidraw-container .excalidraw .sidebar-trigger { display: none !important; }
 
   #loading {
     position: fixed; inset: 0; z-index: 30;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 14px; background: #ffffff;
     color: #555; font-size: 14px;
-    transition: opacity 0.25s ease-out, background 0.2s ease, color 0.2s ease;
+    transition: opacity 0.25s ease-out;
   }
-  body.dark #loading { background: #000000; color: #aaa; }
   #loading.hidden { opacity: 0; pointer-events: none; }
   #loading .spinner {
     width: 28px; height: 28px; border-radius: 50%;
@@ -77,7 +77,6 @@ const STYLES = `
     border-top-color: #4a9eed;
     animation: spin 0.8s linear infinite;
   }
-  body.dark #loading .spinner { border-color: rgba(255, 255, 255, 0.1); border-top-color: #4a9eed; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   #status { position: fixed; bottom: 8px; right: 12px; font-size: 11px; color: #aaa; pointer-events: none; z-index: 10; }
@@ -96,23 +95,16 @@ const STYLES = `
   .pi-control:active { background: rgba(0, 0, 0, 0.04); }
   .pi-control svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-  body.dark .pi-control {
-    color: #e5e5e5; background: rgba(40, 40, 45, 0.92); border-color: rgba(255, 255, 255, 0.12);
+  /* Edit-mode toggle reveals Excalidraw's native toolbar so the user can
+     customise the diagram with the in-canvas tools. */
+  #edit-toggle { right: 12px; }
+  #edit-toggle .icon-edit, #edit-toggle .icon-done { display: none; }
+  body:not(.edit-mode) #edit-toggle .icon-edit { display: block; }
+  body.edit-mode #edit-toggle .icon-done { display: block; }
+  body.edit-mode #edit-toggle {
+    color: #ffffff; background: #4a9eed; border-color: #2563eb;
   }
-  body.dark .pi-control:hover { background: rgba(50, 50, 55, 1); border-color: rgba(255, 255, 255, 0.2); }
-  body.dark .pi-control:active { background: rgba(30, 30, 35, 1); }
-
-  .pi-control.copied { color: #15803d; border-color: #86efac; background: #f0fdf4; }
-  .pi-control.error { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
-  body.dark .pi-control.copied { color: #4ade80; border-color: #166534; background: rgba(20, 83, 45, 0.4); }
-  body.dark .pi-control.error { color: #f87171; border-color: #7f1d1d; background: rgba(127, 29, 29, 0.4); }
-
-  #copy-svg { right: 12px; }
-  #copy-png { right: 130px; }
-  #theme-toggle { right: 248px; padding: 6px 10px; }
-  #theme-toggle .moon, #theme-toggle .sun { display: none; }
-  body:not(.dark) #theme-toggle .moon { display: block; }
-  body.dark #theme-toggle .sun { display: block; }
+  body.edit-mode #edit-toggle:hover { background: #2563eb; }
 
   /* Bottom-left zoom widget: − / 100% / + in a single rounded pill. */
   #zoom-controls {
@@ -133,12 +125,6 @@ const STYLES = `
   #zoom-controls button:active { background: rgba(0, 0, 0, 0.1); }
   #zoom-controls #zoom-level { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
 
-  body.dark #zoom-controls {
-    background: rgba(40, 40, 45, 0.92); border-color: rgba(255, 255, 255, 0.12); color: #e5e5e5;
-  }
-  body.dark #zoom-controls button:hover { background: rgba(255, 255, 255, 0.08); }
-  body.dark #zoom-controls button:active { background: rgba(255, 255, 255, 0.14); }
-
   /* Top-center pan hint. Muted by default, fades out after first interaction. */
   #canvas-hint {
     position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
@@ -148,17 +134,12 @@ const STYLES = `
     transition: opacity 0.4s ease;
   }
   #canvas-hint.hidden { opacity: 0; }
-  body.dark #canvas-hint { color: #888; }
   #canvas-hint kbd {
     display: inline-block; padding: 1px 6px; margin: 0 2px;
     font: inherit; color: inherit;
     background: rgba(0, 0, 0, 0.04);
     border: 1px solid rgba(0, 0, 0, 0.18); border-bottom-width: 2px;
     border-radius: 4px;
-  }
-  body.dark #canvas-hint kbd {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.18);
   }
 `;
 
@@ -172,7 +153,7 @@ export function getWebviewHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
   <title>Excalidraw Preview</title>
   <script type="importmap">
   {
@@ -193,17 +174,10 @@ export function getWebviewHtml(): string {
     <div class="spinner"></div>
     <div id="loading-text">Loading Excalidraw…</div>
   </div>
-  <button id="theme-toggle" class="pi-control" type="button" title="Toggle light/dark mode" hidden>
-    <svg class="moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 1 1 6.5 2.5a4.5 4.5 0 0 0 7 7z"/></svg>
-    <svg class="sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.4 1.4M11.55 11.55l1.4 1.4M3.05 12.95l1.4-1.4M11.55 4.45l1.4-1.4"/></svg>
-  </button>
-  <button id="copy-png" class="pi-control" type="button" title="Copy diagram as PNG to clipboard" hidden>
-    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="9" height="9" rx="1.5"/><path d="M3 10V3a1 1 0 0 1 1-1h7"/></svg>
-    <span>Copy PNG</span>
-  </button>
-  <button id="copy-svg" class="pi-control" type="button" title="Copy diagram as SVG to clipboard" hidden>
-    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="9" height="9" rx="1.5"/><path d="M3 10V3a1 1 0 0 1 1-1h7"/></svg>
-    <span>Copy SVG</span>
+  <button id="edit-toggle" class="pi-control" type="button" title="Toggle edit mode — customize the diagram with the Excalidraw toolbar" hidden>
+    <svg class="icon-edit" viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 1.5l3 3-9 9H2.5v-3z"/><path d="M9.5 3.5l3 3"/></svg>
+    <svg class="icon-done" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5l3.5 3.5 7.5-8"/></svg>
+    <span class="label">Edit</span>
   </button>
   <div id="zoom-controls" hidden>
     <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
@@ -224,7 +198,7 @@ export function getWebviewHtml(): string {
   <script type="module">
     import React, { useState, useEffect, useRef } from "react";
     import { createRoot } from "react-dom/client";
-    import { Excalidraw, convertToExcalidrawElements, exportToBlob, exportToSvg, FONT_FAMILY } from "@excalidraw/excalidraw";
+    import { Excalidraw, convertToExcalidrawElements, restoreElements, exportToBlob, FONT_FAMILY } from "@excalidraw/excalidraw";
 
     const PSEUDO = new Set(["cameraUpdate", "delete", "restoreCheckpoint"]);
 
@@ -238,15 +212,20 @@ export function getWebviewHtml(): string {
       return mermaidPromise;
     }
 
-    /** Convert raw shorthand elements (with label sugar) into Excalidraw format. */
+    /** Convert raw shorthand elements (with label sugar) into Excalidraw format.
+     *  Per the Excalidraw skeleton-API docs, callers that feed elements through
+     *  updateScene MUST run them through restoreElements first — otherwise
+     *  arrows are missing the internal fields the linear-element editor needs,
+     *  so dragging midpoints to bend them produces broken geometry. */
     function convertRaw(els) {
       const real = els.filter((el) => !PSEUDO.has(el.type));
       const withDefaults = real.map((el) =>
         el.label ? { ...el, label: { textAlign: "center", verticalAlign: "middle", ...el.label } } : el,
       );
-      return convertToExcalidrawElements(withDefaults, { regenerateIds: false }).map((el) =>
+      const converted = convertToExcalidrawElements(withDefaults, { regenerateIds: false }).map((el) =>
         el.type === "text" ? { ...el, fontFamily: FONT_FAMILY.Excalifont ?? 1 } : el,
       );
+      return restoreElements(converted, null, { repairBindings: true, refreshDimensions: false });
     }
 
     /** Eagerly load Excalidraw's hand-drawn fonts. Without this, the canvas
@@ -265,20 +244,11 @@ export function getWebviewHtml(): string {
     function sceneSnapshot(api) {
       const elements = api.getSceneElements().filter((el) => !el.isDeleted);
       const appState = api.getAppState();
-      const bg = appState.theme === "dark" ? "#000000" : "#ffffff";
       return {
         elements,
-        appState: { ...appState, exportBackground: true, viewBackgroundColor: bg },
+        appState: { ...appState, exportBackground: true, viewBackgroundColor: "#ffffff" },
         files: api.getFiles?.() ?? {},
       };
-    }
-
-    /** Serialize the current scene to an SVG string for export. */
-    async function sceneToSvgString(api) {
-      const snap = sceneSnapshot(api);
-      if (!snap.elements.length) return { svg: "", count: 0 };
-      const svg = await exportToSvg(snap);
-      return { svg: svg.outerHTML, count: snap.elements.length };
     }
 
     /** Render the current scene to a PNG blob, return base64 + element count. */
@@ -295,55 +265,6 @@ export function getWebviewHtml(): string {
       }
       return { base64: btoa(binary), count: snap.elements.length };
     }
-
-    /** Apply a light/dark theme to the Excalidraw canvas + page chrome. */
-    function setTheme(api, theme) {
-      document.body.classList.toggle("dark", theme === "dark");
-      api.updateScene({
-        appState: { theme, viewBackgroundColor: theme === "dark" ? "#000000" : "#ffffff" },
-      });
-    }
-
-    /** Wire the theme toggle button. Reads the saved choice from localStorage,
-     *  defaults to the OS preference, and persists changes per-session. */
-    function wireThemeToggle(api) {
-      const btn = document.getElementById("theme-toggle");
-      if (!btn) return;
-      btn.hidden = false;
-      const stored = (() => { try { return localStorage.getItem("pi-excalidraw-theme"); } catch { return null; } })();
-      const initial = stored ?? (matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-      setTheme(api, initial);
-      btn.onclick = () => {
-        const next = document.body.classList.contains("dark") ? "light" : "dark";
-        try { localStorage.setItem("pi-excalidraw-theme", next); } catch { /* private mode */ }
-        setTheme(api, next);
-      };
-    }
-
-    /** One copy-button worth of state: DOM nodes + reset timer + the function
-     *  that produces the clipboard payload to ship to the Node side. */
-    const COPY_BUTTON_SPECS = [
-      {
-        target: "svg",
-        elementId: "copy-svg",
-        messageType: "copy-svg",
-        progressLabel: null,
-        export: async (api) => {
-          const { svg, count } = await sceneToSvgString(api);
-          return count ? { svg } : null;
-        },
-      },
-      {
-        target: "png",
-        elementId: "copy-png",
-        messageType: "copy-png",
-        progressLabel: "Rendering…",
-        export: async (api) => {
-          const { base64, count } = await sceneToPngBase64(api);
-          return count ? { base64 } : null;
-        },
-      },
-    ];
 
     /** Set zoom while keeping the viewport center fixed. Excalidraw applies
      *  zoom around screen origin by default, so we adjust scrollX/scrollY to
@@ -444,56 +365,6 @@ export function getWebviewHtml(): string {
       };
     }
 
-    /** Wire the copy-to-clipboard buttons. WKWebView has no Clipboard API in
-     *  opaque origins, so we ship payloads to the Node side via
-     *  window.glimpse.send; the extension copies and pushes feedback back via
-     *  window.__piOnCopyResult({ target, ok, error? }). */
-    function wireCopyButtons(api) {
-      // Build per-button state from the spec table.
-      const wired = {};
-      for (const spec of COPY_BUTTON_SPECS) {
-        const btn = document.getElementById(spec.elementId);
-        if (!btn) continue;
-        btn.hidden = false;
-        const label = btn.querySelector("span");
-        wired[spec.target] = { spec, btn, label, originalLabel: label.textContent, resetTimer: null };
-      }
-
-      const setFeedback = (target, kind, text) => {
-        const w = wired[target];
-        if (!w) return;
-        w.btn.classList.remove("copied", "error");
-        if (kind) w.btn.classList.add(kind);
-        w.label.textContent = text;
-        if (w.resetTimer) clearTimeout(w.resetTimer);
-        w.resetTimer = setTimeout(() => {
-          w.btn.classList.remove("copied", "error");
-          w.label.textContent = w.originalLabel;
-          w.resetTimer = null;
-        }, 1500);
-      };
-
-      window.__piOnCopyResult = (result) => {
-        if (!result?.target) return;
-        if (result.ok) setFeedback(result.target, "copied", "Copied!");
-        else setFeedback(result.target, "error", "Copy failed");
-      };
-
-      for (const w of Object.values(wired)) {
-        w.btn.onclick = async () => {
-          try {
-            if (w.spec.progressLabel) setFeedback(w.spec.target, null, w.spec.progressLabel);
-            const payload = await w.spec.export(api);
-            if (!payload) { setFeedback(w.spec.target, "error", "Nothing to copy"); return; }
-            window.glimpse.send({ type: w.spec.messageType, ...payload });
-          } catch (e) {
-            console.error("export " + w.spec.target + " failed:", e);
-            setFeedback(w.spec.target, "error", "Export failed");
-          }
-        };
-      }
-    }
-
     /** Compute scrollX/scrollY/zoom that center the cameraUpdate viewport in the canvas. */
     function viewportAppState(vp) {
       const w = window.innerWidth;
@@ -506,15 +377,35 @@ export function getWebviewHtml(): string {
       };
     }
 
+    /** Wire the Edit-mode toggle button. Clicking flips React state, which
+     *  re-renders Excalidraw with viewModeEnabled/zenModeEnabled inverted so
+     *  the native toolbar + menus appear, and toggles the body.edit-mode class
+     *  so our CSS reveals the chrome that's normally hidden. */
+    function wireEditToggle(setEditMode) {
+      const btn = document.getElementById("edit-toggle");
+      if (!btn) return;
+      btn.hidden = false;
+      const label = btn.querySelector(".label");
+      btn.onclick = () => setEditMode((prev) => {
+        const next = !prev;
+        document.body.classList.toggle("edit-mode", next);
+        if (label) label.textContent = next ? "Done" : "Edit";
+        btn.title = next
+          ? "Exit edit mode — return to view-only preview"
+          : "Toggle edit mode — customize the diagram with the Excalidraw toolbar";
+        return next;
+      });
+    }
+
     function App() {
       const [api, setApi] = useState(null);
       const [fontsReady, setFontsReady] = useState(false);
+      const [editMode, setEditMode] = useState(false);
       const status = useRef(document.getElementById("status"));
       const pending = useRef(null);
 
       const applyPayload = (payload, excApi) => {
         const elements = convertRaw(Array.isArray(payload?.elements) ? payload.elements : []);
-        // Update only the elements — preserve theme/background set by setTheme.
         excApi.updateScene({ elements });
         // Honor cameraUpdate viewport when present (drives the streaming pan/zoom
         // animation), otherwise fit the whole scene so nothing falls off screen.
@@ -558,11 +449,10 @@ export function getWebviewHtml(): string {
         };
         if (api && fontsReady) {
           if (pending.current) { tryApply(pending.current); pending.current = null; }
-          wireThemeToggle(api);
-          wireCopyButtons(api);
           wireZoomControls(api);
           wireCanvasHint();
           wireRpc(api);
+          wireEditToggle(setEditMode);
         }
       }, [api, fontsReady]);
 
@@ -572,8 +462,12 @@ export function getWebviewHtml(): string {
         React.createElement(Excalidraw, {
           initialData: { elements: [], appState: { viewBackgroundColor: "#ffffff" } },
           excalidrawAPI: setApi,
-          viewModeEnabled: true,
-          zenModeEnabled: true,
+          // When edit mode is on we drop view + zen modes so the user gets the
+          // full Excalidraw toolbar (shape tools, eraser, text, etc.) and can
+          // tweak the diagram. The exit-side controls (export, save, load) stay
+          // hidden via uiOptions — we own those flows from the agent side.
+          viewModeEnabled: !editMode,
+          zenModeEnabled: !editMode,
           uiOptions: { canvasActions: { saveToActiveFile: false, loadScene: false, export: false } },
         }),
       );

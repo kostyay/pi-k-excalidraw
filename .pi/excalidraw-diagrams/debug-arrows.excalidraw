@@ -1,0 +1,714 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "type": "text",
+      "id": "title",
+      "x": 290,
+      "y": 10,
+      "text": "pi-k-excalidraw — Architecture",
+      "fontSize": 24,
+      "strokeColor": "#1e1e1e"
+    },
+    {
+      "type": "text",
+      "id": "sub",
+      "x": 340,
+      "y": 42,
+      "text": "Native Excalidraw preview tool for pi",
+      "fontSize": 14,
+      "strokeColor": "#757575"
+    },
+    {
+      "type": "rectangle",
+      "id": "zAgent",
+      "x": 40,
+      "y": 80,
+      "width": 1100,
+      "height": 150,
+      "backgroundColor": "#dbe4ff",
+      "fillStyle": "solid",
+      "strokeColor": "#4a9eed",
+      "strokeWidth": 1,
+      "opacity": 35,
+      "roundness": {
+        "type": 3
+      }
+    },
+    {
+      "type": "text",
+      "id": "zAgentL",
+      "x": 58,
+      "y": 90,
+      "text": "pi coding agent (host)",
+      "fontSize": 16,
+      "strokeColor": "#2563eb"
+    },
+    {
+      "type": "rectangle",
+      "id": "llm",
+      "x": 80,
+      "y": 135,
+      "width": 190,
+      "height": 80,
+      "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid",
+      "strokeColor": "#4a9eed",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "LLM / Agent",
+        "fontSize": 18
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "extapi",
+      "x": 300,
+      "y": 135,
+      "width": 210,
+      "height": 80,
+      "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid",
+      "strokeColor": "#4a9eed",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "ExtensionAPI\n(events + tools)",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "sysp",
+      "x": 540,
+      "y": 135,
+      "width": 220,
+      "height": 80,
+      "backgroundColor": "#fff3bf",
+      "fillStyle": "solid",
+      "strokeColor": "#f59e0b",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "System Prompt\nelement-format.md",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "cmd",
+      "x": 790,
+      "y": 135,
+      "width": 150,
+      "height": 80,
+      "backgroundColor": "#fff3bf",
+      "fillStyle": "solid",
+      "strokeColor": "#f59e0b",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "/excalidraw\ncmd",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "uiCtx",
+      "x": 960,
+      "y": 135,
+      "width": 160,
+      "height": 80,
+      "backgroundColor": "#ffd8a8",
+      "fillStyle": "solid",
+      "strokeColor": "#f59e0b",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "ctx.ui\nconfirm / input",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "zExt",
+      "x": 40,
+      "y": 270,
+      "width": 1100,
+      "height": 350,
+      "backgroundColor": "#e5dbff",
+      "fillStyle": "solid",
+      "strokeColor": "#8b5cf6",
+      "strokeWidth": 1,
+      "opacity": 30,
+      "roundness": {
+        "type": 3
+      }
+    },
+    {
+      "type": "text",
+      "id": "zExtL",
+      "x": 58,
+      "y": 280,
+      "text": "extensions/pi-k-excalidraw/",
+      "fontSize": 16,
+      "strokeColor": "#6d28d9"
+    },
+    {
+      "type": "rectangle",
+      "id": "idx",
+      "x": 420,
+      "y": 320,
+      "width": 340,
+      "height": 120,
+      "backgroundColor": "#d0bfff",
+      "fillStyle": "solid",
+      "strokeColor": "#8b5cf6",
+      "strokeWidth": 2,
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "index.ts\nregisters tools + /excalidraw\nstreams to webview, RPC,\nreview loop on agent_end",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "parser",
+      "x": 80,
+      "y": 320,
+      "width": 280,
+      "height": 120,
+      "backgroundColor": "#d0bfff",
+      "fillStyle": "solid",
+      "strokeColor": "#8b5cf6",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "parser.ts\nresolve cameraUpdate /\ndelete / restoreCheckpoint",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "diag",
+      "x": 820,
+      "y": 320,
+      "width": 280,
+      "height": 120,
+      "backgroundColor": "#d0bfff",
+      "fillStyle": "solid",
+      "strokeColor": "#8b5cf6",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "diagrams.ts\nslugify, paths,\npersistence helpers",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_idx_p",
+      "x": 420,
+      "y": 380,
+      "width": -60,
+      "height": 0,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -60,
+          0
+        ]
+      ],
+      "strokeColor": "#8b5cf6",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow"
+    },
+    {
+      "type": "arrow",
+      "id": "a_idx_d",
+      "x": 760,
+      "y": 380,
+      "width": 60,
+      "height": 0,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "strokeColor": "#8b5cf6",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow"
+    },
+    {
+      "type": "rectangle",
+      "id": "prom",
+      "x": 80,
+      "y": 468,
+      "width": 280,
+      "height": 140,
+      "backgroundColor": "#fff3bf",
+      "fillStyle": "solid",
+      "strokeColor": "#f59e0b",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "prompts/\ndraw-instruction.md\nreview-instruction.md\nelement-format.md",
+        "fontSize": 14
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_idx_prom",
+      "x": 420,
+      "y": 440,
+      "width": -200,
+      "height": 28,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -200,
+          28
+        ]
+      ],
+      "strokeColor": "#f59e0b",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "loadPrompt",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_llm_ext",
+      "x": 175,
+      "y": 215,
+      "width": 0,
+      "height": 105,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          105
+        ]
+      ],
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "tool calls",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_ext_llm",
+      "x": 480,
+      "y": 320,
+      "width": -180,
+      "height": -105,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -180,
+          -105
+        ]
+      ],
+      "strokeColor": "#22c55e",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "register",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_sysp",
+      "x": 650,
+      "y": 215,
+      "width": -90,
+      "height": 105,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -90,
+          105
+        ]
+      ],
+      "strokeColor": "#f59e0b",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "inject",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_ui",
+      "x": 1040,
+      "y": 215,
+      "width": -330,
+      "height": 105,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -330,
+          105
+        ]
+      ],
+      "strokeColor": "#f59e0b",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "confirm + input",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "zPrev",
+      "x": 40,
+      "y": 660,
+      "width": 700,
+      "height": 210,
+      "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid",
+      "strokeColor": "#22c55e",
+      "strokeWidth": 1,
+      "opacity": 30,
+      "roundness": {
+        "type": 3
+      }
+    },
+    {
+      "type": "text",
+      "id": "zPrevL",
+      "x": 58,
+      "y": 670,
+      "text": "Glimpse webview (preview window)",
+      "fontSize": 16,
+      "strokeColor": "#15803d"
+    },
+    {
+      "type": "rectangle",
+      "id": "web",
+      "x": 80,
+      "y": 710,
+      "width": 260,
+      "height": 140,
+      "backgroundColor": "#b2f2bb",
+      "fillStyle": "solid",
+      "strokeColor": "#22c55e",
+      "strokeWidth": 2,
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "webview.ts\nReact + Excalidraw\nesm.sh, RPC channel",
+        "fontSize": 14
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "exc",
+      "x": 380,
+      "y": 710,
+      "width": 320,
+      "height": 140,
+      "backgroundColor": "#c3fae8",
+      "fillStyle": "solid",
+      "strokeColor": "#0d9488",
+      "strokeWidth": 2,
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "@excalidraw/excalidraw\nview mode + Edit toggle\nstream user edits back",
+        "fontSize": 14
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_web_exc",
+      "x": 340,
+      "y": 780,
+      "width": 40,
+      "height": 0,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          40,
+          0
+        ]
+      ],
+      "strokeColor": "#22c55e",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow"
+    },
+    {
+      "type": "rectangle",
+      "id": "zFs",
+      "x": 800,
+      "y": 660,
+      "width": 340,
+      "height": 210,
+      "backgroundColor": "#fff3bf",
+      "fillStyle": "solid",
+      "strokeColor": "#f59e0b",
+      "strokeWidth": 1,
+      "opacity": 35,
+      "roundness": {
+        "type": 3
+      }
+    },
+    {
+      "type": "text",
+      "id": "zFsL",
+      "x": 818,
+      "y": 670,
+      "text": "Filesystem",
+      "fontSize": 16,
+      "strokeColor": "#b45309"
+    },
+    {
+      "type": "rectangle",
+      "id": "fs",
+      "x": 830,
+      "y": 710,
+      "width": 280,
+      "height": 140,
+      "backgroundColor": "#ffd8a8",
+      "fillStyle": "solid",
+      "strokeColor": "#f59e0b",
+      "strokeWidth": 2,
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": ".pi/excalidraw-diagrams/\n*.excalidraw",
+        "fontSize": 15
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_diag_fs",
+      "x": 960,
+      "y": 440,
+      "width": 0,
+      "height": 265,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          265
+        ]
+      ],
+      "strokeColor": "#f59e0b",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "save / load",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "tools2",
+      "x": 410,
+      "y": 468,
+      "width": 700,
+      "height": 80,
+      "backgroundColor": "#eebefa",
+      "fillStyle": "solid",
+      "strokeColor": "#a855f7",
+      "strokeWidth": 1,
+      "opacity": 50,
+      "roundness": {
+        "type": 3
+      }
+    },
+    {
+      "type": "text",
+      "id": "toolsL2",
+      "x": 424,
+      "y": 476,
+      "text": "Registered tools",
+      "fontSize": 14,
+      "strokeColor": "#7e22ce"
+    },
+    {
+      "type": "rectangle",
+      "id": "u1",
+      "x": 420,
+      "y": 498,
+      "width": 130,
+      "height": 42,
+      "backgroundColor": "#ffffff",
+      "fillStyle": "solid",
+      "strokeColor": "#a855f7",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "draw_diagram",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "u2",
+      "x": 560,
+      "y": 498,
+      "width": 140,
+      "height": 42,
+      "backgroundColor": "#ffffff",
+      "fillStyle": "solid",
+      "strokeColor": "#a855f7",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "draw_mermaid",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "u3",
+      "x": 710,
+      "y": 498,
+      "width": 130,
+      "height": 42,
+      "backgroundColor": "#ffffff",
+      "fillStyle": "solid",
+      "strokeColor": "#a855f7",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "screenshot",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "u4",
+      "x": 850,
+      "y": 498,
+      "width": 250,
+      "height": 42,
+      "backgroundColor": "#ffffff",
+      "fillStyle": "solid",
+      "strokeColor": "#a855f7",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "save / load / list",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_idx_web2",
+      "x": 510,
+      "y": 440,
+      "width": -300,
+      "height": 270,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -300,
+          270
+        ]
+      ],
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "win.send / RPC",
+        "fontSize": 13
+      }
+    },
+    {
+      "type": "arrow",
+      "id": "a_exc_idx2",
+      "x": 660,
+      "y": 710,
+      "width": 50,
+      "height": -270,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          50,
+          -270
+        ]
+      ],
+      "strokeColor": "#0d9488",
+      "strokeWidth": 2,
+      "strokeStyle": "dashed",
+      "endArrowhead": "arrow",
+      "label": {
+        "text": "screenshot / edits",
+        "fontSize": 13
+      }
+    }
+  ],
+  "appState": {
+    "gridSize": null,
+    "viewBackgroundColor": "#ffffff"
+  },
+  "files": {}
+}

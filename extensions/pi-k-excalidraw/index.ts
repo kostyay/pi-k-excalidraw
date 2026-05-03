@@ -16,14 +16,12 @@
  *     session so the model never has to ask for it.
  */
 
-import { copyToClipboard, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
-import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,6 +72,12 @@ let lastCheckpointId: string | null = null;
  *  system prompt at the start of every agent turn. Persists for the session. */
 let cheatSheetActive = false;
 
+/** Toggled on by /excalidraw and stays on across refinement turns. While true,
+ *  every `agent_end` prompts the user for an optional review pass (screenshot +
+ *  comments forwarded back to the LLM). Cleared when the user declines, when
+ *  the dialog is dismissed, or when no diagram exists to review. */
+let reviewLoopActive = false;
+
 /** Per-tool-call buffers of streaming `draw_diagram` argument JSON. */
 const streamBuffers = new Map<string, string>();
 
@@ -108,6 +112,11 @@ const ELEMENT_FORMAT_PROMPT = loadPrompt("element-format.md");
  *  is replaced with the user's diagram description. */
 const DRAW_INSTRUCTION_TEMPLATE = loadPrompt("draw-instruction.md");
 
+/** Follow-up user-message template for the review loop. `{{comments}}` is the
+ *  user's free-form feedback (may be empty); `{{checkpointId}}` is the most
+ *  recent diagram checkpoint to extend. */
+const REVIEW_INSTRUCTION_TEMPLATE = loadPrompt("review-instruction.md");
+
 /**
  * Lazily import the glimpseui module. Tries the bare specifier first (works when
  * pi resolves through the same global node_modules); falls back to a path derived
@@ -135,79 +144,19 @@ async function loadGlimpse(): Promise<GlimpseModule> {
 	}
 }
 
-/** Write a PNG image to the macOS pasteboard via osascript. Linux/Windows are
- *  not supported yet — callers should expect a rejection on those platforms. */
-async function copyPngToClipboard(bytes: Uint8Array): Promise<void> {
-	if (process.platform !== "darwin") {
-		throw new Error(`Copy PNG is only supported on macOS (got ${process.platform})`);
-	}
-	const tmp = path.join(os.tmpdir(), `pi-excalidraw-${crypto.randomUUID()}.png`);
-	await fs.writeFile(tmp, bytes);
-	try {
-		await new Promise<void>((resolve, reject) => {
-			execFile(
-				"osascript",
-				["-e", `set the clipboard to (read (POSIX file "${tmp}") as «class PNGf»)`],
-				(err) => (err ? reject(err) : resolve()),
-			);
-		});
-	} finally {
-		await fs.unlink(tmp).catch(() => undefined);
-	}
-}
-
-/** Send a copy-result ack back to the webview UI. */
-function sendCopyResult(win: GlimpseWindow, target: "svg" | "png", ok: boolean, error?: string): void {
-	const payload = { ok, target, ...(error ? { error } : {}) };
-	win.send(`window.__piOnCopyResult?.(${JSON.stringify(payload)})`);
-}
-
-/** Run a copy task and ack the webview with success or the error message. */
-async function runCopy(win: GlimpseWindow, target: "svg" | "png", task: () => Promise<void>): Promise<void> {
-	try {
-		await task();
-		sendCopyResult(win, target, true);
-	} catch (e) {
-		sendCopyResult(win, target, false, errorMessage(e));
-	}
-}
-
-/** Handle a message from the webview. Routes `copy-svg` / `copy-png` requests
- *  to the appropriate clipboard writer and `rpc-result` replies to the matching
- *  pending RPC entry. */
-async function handleWebviewMessage(win: GlimpseWindow, data: unknown): Promise<void> {
+/** Handle a message from the webview. The only message type currently emitted
+ *  is `rpc-result` — settle the matching pending RPC entry. */
+function handleWebviewMessage(_win: GlimpseWindow, data: unknown): void {
 	if (!data || typeof data !== "object") return;
-	const msg = data as {
-		type?: unknown;
-		svg?: unknown;
-		base64?: unknown;
-		id?: unknown;
-		ok?: unknown;
-		data?: unknown;
-		error?: unknown;
-	};
+	const msg = data as { type?: unknown; id?: unknown; ok?: unknown; data?: unknown; error?: unknown };
+	if (msg.type !== "rpc-result" || typeof msg.id !== "string") return;
 
-	if (msg.type === "copy-svg" && typeof msg.svg === "string") {
-		const svg = msg.svg;
-		await runCopy(win, "svg", () => copyToClipboard(svg));
-		return;
-	}
-
-	if (msg.type === "copy-png" && typeof msg.base64 === "string") {
-		const base64 = msg.base64;
-		await runCopy(win, "png", () => copyPngToClipboard(Buffer.from(base64, "base64")));
-		return;
-	}
-
-	if (msg.type === "rpc-result" && typeof msg.id === "string") {
-		const entry = pendingRpcs.get(msg.id);
-		if (!entry) return;
-		pendingRpcs.delete(msg.id);
-		entry.cleanup();
-		if (msg.ok) entry.resolve(msg.data);
-		else entry.reject(new Error(typeof msg.error === "string" ? msg.error : "Webview RPC failed"));
-		return;
-	}
+	const entry = pendingRpcs.get(msg.id);
+	if (!entry) return;
+	pendingRpcs.delete(msg.id);
+	entry.cleanup();
+	if (msg.ok) entry.resolve(msg.data);
+	else entry.reject(new Error(typeof msg.error === "string" ? msg.error : "Webview RPC failed"));
 }
 
 /** Settle a pending RPC by id, running its cleanup and rejecting with `err`.
@@ -260,8 +209,8 @@ function callWebviewRpc<T = unknown>(
 async function openPreviewWindow(): Promise<void> {
 	const glimpse = await loadGlimpse();
 	const win = glimpse.open(getWebviewHtml(), {
-		width: 1000,
-		height: 750,
+		width: 1400,
+		height: 900,
 		title: "Excalidraw Preview",
 	});
 	activeWindow = win;
@@ -269,7 +218,7 @@ async function openPreviewWindow(): Promise<void> {
 		activeWindow = null;
 		windowReadyPromise = null;
 	});
-	win.on("message", (data) => { void handleWebviewMessage(win, data); });
+	win.on("message", (data) => handleWebviewMessage(win, data));
 	await new Promise<void>((resolve) => win.on("ready", () => resolve()));
 }
 
@@ -727,8 +676,64 @@ export default function excalidrawExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			cheatSheetActive = true;
+			reviewLoopActive = true;
 			pi.sendUserMessage(DRAW_INSTRUCTION_TEMPLATE.replace("{{task}}", task));
 		},
+	});
+
+	// After every drawing turn started by /excalidraw, prompt the user to
+	// optionally send the screenshot back to the LLM with comments. Stays armed
+	// across refinement turns so the user can iterate; cleared when the user
+	// declines or dismisses the dialog.
+	pi.on("agent_end", async (_event, ctx) => {
+		if (!reviewLoopActive) return;
+		if (!ctx.hasUI) { reviewLoopActive = false; return; }
+		if (!lastCheckpointId || !activeWindow) { reviewLoopActive = false; return; }
+
+		let shouldReview: boolean;
+		try {
+			shouldReview = await ctx.ui.confirm(
+				"Excalidraw review",
+				"Send the diagram screenshot to the LLM for another review pass?",
+			);
+		} catch { reviewLoopActive = false; return; }
+		if (!shouldReview) { reviewLoopActive = false; return; }
+
+		let comments: string | undefined;
+		try {
+			comments = await ctx.ui.input(
+				"Excalidraw review — comments",
+				"What would you like fixed? (leave empty for a general review)",
+			);
+		} catch { reviewLoopActive = false; return; }
+		if (comments === undefined) { reviewLoopActive = false; return; }
+
+		let shot: { base64: string; count: number };
+		try {
+			shot = await callWebviewRpc("screenshot", {}, 15_000);
+		} catch (e) {
+			ctx.ui.notify(`Excalidraw screenshot failed: ${errorMessage(e)}`, "error");
+			reviewLoopActive = false;
+			return;
+		}
+		if (!shot.base64) {
+			ctx.ui.notify("Excalidraw diagram is empty — nothing to review.", "warning");
+			reviewLoopActive = false;
+			return;
+		}
+
+		const trimmed = comments.trim();
+		const commentBlock = trimmed.length > 0
+			? trimmed
+			: "(no specific comments — review the screenshot for issues)";
+		const userText = REVIEW_INSTRUCTION_TEMPLATE
+			.replace("{{comments}}", commentBlock)
+			.replace("{{checkpointId}}", lastCheckpointId);
+
+		pi.sendUserMessage([
+			{ type: "text", text: userText },
+			{ type: "image", data: shot.base64, mimeType: "image/png" },
+		]);
 	});
 
 	pi.on("before_agent_start", async (event) => {

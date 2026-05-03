@@ -68,13 +68,31 @@ Canvas background is white.
 - estimatedWidth ≈ text.length × fontSize × 0.5
 - Do NOT rely on textAlign or width for positioning — they only affect multi-line wrapping
 
-**Arrow**: `{ "type": "arrow", "id": "a1", "x": 300, "y": 150, "width": 200, "height": 0, "points": [[0,0],[200,0]], "endArrowhead": "arrow" }`
-- points: [dx, dy] offsets from element x,y
-- endArrowhead: null | "arrow" | "bar" | "dot" | "triangle"
+**Arrow** (straight): `{ "type": "arrow", "id": "a1", "x": 300, "y": 150, "width": 200, "height": 0, "points": [[0,0],[200,0]], "endArrowhead": "arrow" }`
+- `points`: array of `[dx, dy]` offsets from element x,y. First point is always `[0,0]`.
+- `width`/`height`: bounding box of the points (max-min on each axis). Required for hit-testing — wrong values make the arrow hard to select in edit mode.
+- `endArrowhead` / `startArrowhead`: `null | "arrow" | "bar" | "dot" | "triangle"`
+
+**Bent arrow (polyline)** — add 3+ points for right-angle / multi-segment routing:
+`{ "type": "arrow", "id": "a2", "x": 100, "y": 100, "width": 200, "height": 120, "points": [[0,0],[200,0],[200,120]], "endArrowhead": "arrow" }`
+- Goes right 200, then down 120. Use for L-shaped / Z-shaped connectors.
+- S-curve / multi-bend: just keep adding points, e.g. `[[0,0],[100,0],[100,80],[200,80],[200,160]]`.
+
+**Curved bend** — same as polyline + `"roundness": { "type": 2 }` smooths the corners into a flowing curve. Great for organic-looking flows.
+
+**Elbow arrow (auto-routed)** — `"elbowed": true` + start/end bindings. Excalidraw computes a clean Manhattan route between the two bound shapes; you don't need to plan the points yourself. Perfect for org charts and flowcharts:
+`{ "type": "arrow", "id": "a3", "x": 0, "y": 0, "width": 0, "height": 0, "points": [[0,0],[0,0]], "elbowed": true, "endArrowhead": "arrow", "startBinding": { "elementId": "b1", "fixedPoint": [1, 0.5] }, "endBinding": { "elementId": "b2", "fixedPoint": [0, 0.5] } }`
+
+When to use which:
+- Straight: direct A→B with no obstacles.
+- Bent polyline: you know exactly where the corners should go (e.g. routing around a labeled box).
+- Curved (`roundness.type:2`): aesthetic, organic flows; sequence diagrams with reply curves.
+- Elbowed: connecting two bound shapes in a flowchart — let Excalidraw route it.
 
 ### Arrow Bindings
 Arrow: `"startBinding": { "elementId": "r1", "fixedPoint": [1, 0.5] }`
 fixedPoint: top=[0.5,0], bottom=[0.5,1], left=[0,0.5], right=[1,0.5]
+Labels (`"label":{"text":"..."}`) center on the geometric midpoint of the polyline — for long bent arrows, prefer short labels or place a separate text element near the segment you want labeled.
 
 **cameraUpdate** (pseudo-element — controls the viewport, not drawn):
 `{ "type": "cameraUpdate", "width": 800, "height": 600, "x": 0, "y": 0 }`
