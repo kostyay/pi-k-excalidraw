@@ -40,6 +40,9 @@
     "test": "npm run lint && node --experimental-strip-types --test extensions/pi-k-excalidraw/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "glimpseui": "^0.8.0"
+  },
   "peerDependencies": {
     "@mariozechner/pi-ai": "*",
     "@mariozechner/pi-coding-agent": "*",
