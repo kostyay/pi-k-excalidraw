@@ -36,7 +36,8 @@
     ]
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test extensions/pi-k-excalidraw/*.test.ts",
+    "lint": "eslint --fix extensions/ && tsc --noEmit",
+    "test": "npm run lint && node --experimental-strip-types --test extensions/pi-k-excalidraw/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -50,7 +51,9 @@
     "@mariozechner/pi-coding-agent": "^0.69.0",
     "@mariozechner/pi-tui": "^0.69.0",
     "@types/node": "^22.10.0",
+    "eslint": "^10.3.0",
     "typebox": "^1.1.32",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.59.1"
   }
 }

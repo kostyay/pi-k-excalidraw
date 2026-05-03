@@ -173,6 +173,16 @@ export function getWebviewHtml(): string {
 
     const PSEUDO = new Set(["cameraUpdate", "delete", "restoreCheckpoint"]);
 
+    // Lazy-load mermaid only when draw_mermaid_diagram is actually used. The
+    // mermaid bundle is ~1MB, so we don't want to pay for it on every preview.
+    let mermaidPromise = null;
+    function loadMermaid() {
+      if (!mermaidPromise) {
+        mermaidPromise = import("https://esm.sh/@excalidraw/mermaid-to-excalidraw@2.2.2");
+      }
+      return mermaidPromise;
+    }
+
     /** Convert raw shorthand elements (with label sugar) into Excalidraw format. */
     function convertRaw(els) {
       const real = els.filter((el) => !PSEUDO.has(el.type));
@@ -279,6 +289,38 @@ export function getWebviewHtml(): string {
         },
       },
     ];
+
+    /** Send an RPC success/failure reply over the glimpse reverse channel. */
+    function rpcOk(id, data) { window.glimpse.send({ type: "rpc-result", id, ok: true, data }); }
+    function rpcErr(id, error) { window.glimpse.send({ type: "rpc-result", id, ok: false, error }); }
+
+    /** Wire the Node→webview RPC channel. The Node side calls
+     *  window.__piRpcRequest({method, id, args}) via win.send; we dispatch on
+     *  method, run the handler, and ship the result back through glimpse.send. */
+    function wireRpc(api) {
+      const handlers = {
+        screenshot: async () => sceneToPngBase64(api),
+        mermaid: async (args) => {
+          const definition = args?.definition;
+          if (typeof definition !== "string" || !definition.trim()) {
+            throw new Error("Mermaid definition must be a non-empty string.");
+          }
+          const mod = await loadMermaid();
+          const { elements, files } = await mod.parseMermaidToExcalidraw(definition);
+          // Skeleton elements ready for convertToExcalidrawElements; ship them
+          // back to Node so they can flow through the standard checkpoint +
+          // render pipeline like any other draw_diagram payload.
+          return { elements, files: files ?? {}, count: elements.length };
+        },
+      };
+      window.__piRpcRequest = async (req) => {
+        if (!req || typeof req.id !== "string" || typeof req.method !== "string") return;
+        const handler = handlers[req.method];
+        if (!handler) { rpcErr(req.id, "Unknown RPC method: " + req.method); return; }
+        try { rpcOk(req.id, await handler(req.args ?? {})); }
+        catch (e) { rpcErr(req.id, e?.message ?? String(e)); }
+      };
+    }
 
     /** Wire the copy-to-clipboard buttons. WKWebView has no Clipboard API in
      *  opaque origins, so we ship payloads to the Node side via
@@ -396,6 +438,7 @@ export function getWebviewHtml(): string {
           if (pending.current) { tryApply(pending.current); pending.current = null; }
           wireThemeToggle(api);
           wireCopyButtons(api);
+          wireRpc(api);
         }
       }, [api, fontsReady]);
 
